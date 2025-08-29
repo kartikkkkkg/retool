@@ -97,6 +97,23 @@ public class AuthController {
             return ResponseEntity.status(401).body("Not authenticated.");
         }
     }
+
+@PostMapping("/register")
+public ResponseEntity<?> registerUser(@RequestParam String user_id, @RequestParam String email, @RequestParam String password, @RequestParam String user_role) {
+    User newUser = new User();
+    newUser.setUser_id(user_id);
+    newUser.setEmail(email);
+    newUser.setPassword(password); // This will be encoded in the UserService
+    newUser.setUser_role(user_role);
+
+    User createdUser = userService.registerNewUser(newUser);
+
+    if (createdUser != null) {
+        return ResponseEntity.ok("User registered successfully!");
+    } else {
+        return ResponseEntity.badRequest().body("User registration failed.");
+    }
+}
 }
 
 
