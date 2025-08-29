@@ -96,3 +96,34 @@ public class UserService {
     }
 }
 
+
+package com.example.demo.controller;
+
+import com.example.demo.model.User;
+import com.example.demo.service.UserService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
+
+    private final UserService userService;
+
+    public AuthController(UserService userService) {
+        this.userService = userService;
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestParam String email, @RequestParam String password) {
+        User user = userService.login(email, password);
+        if (user != null) {
+            return ResponseEntity.ok("Login successful for role: " + user.getUser_role());
+        } else {
+            return ResponseEntity.status(401).body("Invalid credentials");
+        }
+    }
+}
+
+
+
