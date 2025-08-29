@@ -1,4 +1,30 @@
-package com.example.demo.model;
+package project.login.controller;
+
+import project.login.model.User;
+import project.login.service.UserService;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
+
+    private final UserService userService;
+
+    public AuthController(UserService userService) {
+        this.userService = userService;
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<?> login(@RequestParam String email, @RequestParam String password) {
+        User user = userService.login(email, password);
+        if (user != null) {
+            return ResponseEntity.ok("Login successful for role: " + user.getUser_role());
+        } else {
+            return ResponseEntity.status(401).body("Invalid credentials");
+        }
+    }
+}package com.example.demo.model;
 
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
