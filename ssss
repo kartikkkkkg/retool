@@ -26,7 +26,7 @@ public class SecurityConfig {
         http
             .csrf().disable()
             .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers("/api/auth/register").permitAll() // Ensure this is correct
+                .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                 .anyRequest().authenticated()
             )
             .httpBasic();
@@ -48,81 +48,3 @@ public class SecurityConfig {
                 .build();
     }
 }
-
-
-
-package project.login.controller;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import project.login.dto.UserRegistrationDto; // Create this DTO
-import project.login.model.User;
-import project.login.service.UserService;
-
-@RestController
-@RequestMapping("/api/auth")
-public class AuthController {
-    
-    private final UserService userService;
-
-    public AuthController(UserService userService) {
-        this.userService = userService;
-    }
-
-    @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@RequestBody UserRegistrationDto registrationDto) {
-        User newUser = new User();
-        newUser.setEmail(registrationDto.getEmail());
-        newUser.setPassword(registrationDto.getPassword()); 
-        newUser.setUser_role(registrationDto.getUser_role());
-
-        User createdUser = userService.registerNewUser(newUser);
-
-        if (createdUser != null) {
-            return ResponseEntity.ok("User registered successfully!");
-        } else {
-            return ResponseEntity.badRequest().body("User registration failed.");
-        }
-    }
-}
-
-
-
-
------
-
-
-package project.login.dto; 
-
-public class UserRegistrationDto {
-    private String email;
-    private String password;
-    private String user_role;
-
-    // Getters and Setters
-    public String getEmail() {
-        return email;
-    }
-
-    public void setEmail(String email) {
-        this.email = email;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getUser_role() {
-        return user_role;
-    }
-
-    public void setUser_role(String user_role) {
-        this.user_role = user_role;
-    }
-}
-
-
