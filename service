@@ -1,0 +1,93 @@
+package project.user.service.impl;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import project.user.model.Report;
+import project.user.model.SubGroup;
+import project.user.repository.ReportRepository;
+import project.user.repository.SubGroupRepository;
+import project.user.service.ReportService;
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class ReportServiceImpl implements ReportService {
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    @Autowired
+    private SubGroupRepository subGroupRepository;
+
+    @Override
+    public Report saveReport(Report report) {
+        return reportRepository.save(report);
+    }
+
+    @Override
+    public List<Report> getReportsBySubGroup(Long subGroupId) {
+        Optional<SubGroup> subGroup = subGroupRepository.findById(subGroupId);
+        return subGroup.map(reportRepository::findBySubGroup).orElse(List.of());
+    }
+
+    @Override
+    public Optional<Report> getReportById(Long reportId) {
+        return reportRepository.findById(reportId);
+    }
+}
+✅ Fixed FavoriteServiceImpl.java
+java
+Copy code
+package project.user.service.impl;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import project.user.model.Favorite;
+import project.user.model.Report;
+import project.user.model.User;
+import project.user.repository.FavoriteRepository;
+import project.user.repository.ReportRepository;
+import project.user.repository.UserRepository;
+import project.user.service.FavoriteService;
+
+import java.util.List;
+import java.util.Optional;
+
+@Service
+public class FavoriteServiceImpl implements FavoriteService {
+
+    @Autowired
+    private FavoriteRepository favoriteRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    @Override
+    public Favorite addFavorite(Long userId, Long reportId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found"));
+
+        Favorite favorite = new Favorite();
+        favorite.setUser(user);
+        favorite.setReport(report);
+
+        return favoriteRepository.save(favorite);
+    }
+
+    @Override
+    public List<Favorite> getFavoritesByUser(Long userId) {
+        return favoriteRepository.findByUser_UserId(userId);
+    }
+
+    @Override
+    public void removeFavorite(Long favoriteId) {
+        favoriteRepository.deleteById(favoriteId);
+    }
+}
