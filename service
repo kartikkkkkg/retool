@@ -1,4 +1,5 @@
-package project.user.service.impl;
+✅ ReportService.java
+package project.user.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -6,13 +7,12 @@ import project.user.model.Report;
 import project.user.model.SubGroup;
 import project.user.repository.ReportRepository;
 import project.user.repository.SubGroupRepository;
-import project.user.service.ReportService;
 
 import java.util.List;
 import java.util.Optional;
 
 @Service
-public class ReportServiceImpl implements ReportService {
+public class ReportService {
 
     @Autowired
     private ReportRepository reportRepository;
@@ -20,26 +20,25 @@ public class ReportServiceImpl implements ReportService {
     @Autowired
     private SubGroupRepository subGroupRepository;
 
-    @Override
+    // Save a report
     public Report saveReport(Report report) {
         return reportRepository.save(report);
     }
 
-    @Override
+    // Get all reports by SubGroup
     public List<Report> getReportsBySubGroup(Long subGroupId) {
         Optional<SubGroup> subGroup = subGroupRepository.findById(subGroupId);
         return subGroup.map(reportRepository::findBySubGroup).orElse(List.of());
     }
 
-    @Override
+    // Get single report by ID
     public Optional<Report> getReportById(Long reportId) {
         return reportRepository.findById(reportId);
     }
 }
-✅ Fixed FavoriteServiceImpl.java
-java
-Copy code
-package project.user.service.impl;
+
+✅ FavoriteService.java
+package project.user.service;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -49,13 +48,11 @@ import project.user.model.User;
 import project.user.repository.FavoriteRepository;
 import project.user.repository.ReportRepository;
 import project.user.repository.UserRepository;
-import project.user.service.FavoriteService;
 
 import java.util.List;
-import java.util.Optional;
 
 @Service
-public class FavoriteServiceImpl implements FavoriteService {
+public class FavoriteService {
 
     @Autowired
     private FavoriteRepository favoriteRepository;
@@ -66,7 +63,7 @@ public class FavoriteServiceImpl implements FavoriteService {
     @Autowired
     private ReportRepository reportRepository;
 
-    @Override
+    // Add a report to favorites
     public Favorite addFavorite(Long userId, Long reportId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -81,13 +78,35 @@ public class FavoriteServiceImpl implements FavoriteService {
         return favoriteRepository.save(favorite);
     }
 
-    @Override
+    // Get favorites by user
     public List<Favorite> getFavoritesByUser(Long userId) {
         return favoriteRepository.findByUser_UserId(userId);
     }
 
-    @Override
+    // Remove favorite
     public void removeFavorite(Long favoriteId) {
         favoriteRepository.deleteById(favoriteId);
+    }
+}
+
+✅ NotificationService.java
+package project.user.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import project.user.model.Notification;
+import project.user.repository.NotificationRepository;
+
+import java.util.List;
+
+@Service
+public class NotificationService {
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    // Get all notifications for a user
+    public List<Notification> getNotificationsForUser(Long userId) {
+        return notificationRepository.findByUser_UserId(userId);
     }
 }
