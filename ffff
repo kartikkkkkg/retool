@@ -1,0 +1,142 @@
+🟢 Favorite.java (Entity Model)
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Getter
+@Setter
+@Table(name = "Favorites")
+public class Favorite {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    // Relation to User
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    // Relation to Report
+    @ManyToOne
+    @JoinColumn(name = "report_id", nullable = false)
+    private Report report;
+}
+
+🟢 Report.java (Entity Model)
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import java.time.LocalDate;
+
+@Entity
+@Getter
+@Setter
+@Table(name = "Reports")
+public class Report {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "report_id")
+    private Long reportId;
+
+    private String name;
+
+    private String type; // PDF/Excel/CSV
+
+    private LocalDate date;
+
+    private String folder; // same as SubGroup name
+
+    @ManyToOne
+    @JoinColumn(name = "sub_group_id", nullable = false)
+    private SubGroup subGroup;
+}
+
+🟢 FavoriteService.java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
+
+@Service
+public class FavoriteService {
+
+    @Autowired
+    private FavoriteRepository favoriteRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    // Add a report to favorites
+    public Favorite addFavorite(Long userId, Long reportId) {
+        Favorite fav = new Favorite();
+        fav.setUser(userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found")));
+        fav.setReport(reportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found")));
+        return favoriteRepository.save(fav);
+    }
+
+    // Get favorite reports for a user
+    public List<Report> getFavorites(Long userId) {
+        List<Favorite> favorites = favoriteRepository.findByUser_UserId(userId);
+        return favorites.stream()
+                        .map(Favorite::getReport)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
+    }
+
+    // Remove a report from favorites
+    public void removeFavorite(Long userId, Long reportId) {
+        List<Favorite> favorites = favoriteRepository.findByUser_UserId(userId);
+        favorites.stream()
+                 .filter(fav -> fav.getReport() != null 
+                             && fav.getReport().getReportId() != null 
+                             && fav.getReport().getReportId().equals(reportId))
+                 .findFirst()
+                 .ifPresent(favoriteRepository::delete);
+    }
+}
+
+🟢 FavoriteController.java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
+
+@RestController
+@RequestMapping("/favorites")
+public class FavoriteController {
+
+    @Autowired
+    private FavoriteService favoriteService;
+
+    // Add to favorites
+    @PostMapping("/{userId}/{reportId}")
+    public ResponseEntity<Favorite> addFavorite(@PathVariable Long userId,
+                                                @PathVariable Long reportId) {
+        Favorite favorite = favoriteService.addFavorite(userId, reportId);
+        return ResponseEntity.ok(favorite);
+    }
+
+    // Get user's favorites
+    @GetMapping("/{userId}")
+    public ResponseEntity<List<Report>> getFavorites(@PathVariable Long userId) {
+        List<Report> favorites = favoriteService.getFavorites(userId);
+        return ResponseEntity.ok(favorites);
+    }
+
+    // Remove from favorites
+    @DeleteMapping("/{userId}/{reportId}")
+    public ResponseEntity<Void> removeFavorite(@PathVariable Long userId,
+                                               @PathVariable Long reportId) {
+        favoriteService.removeFavorite(userId, reportId);
+        return ResponseEntity.noContent().build();
+    }
+}
