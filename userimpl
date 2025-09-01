@@ -244,96 +244,148 @@ INSERT INTO Notifications (user_id, report_id) VALUES (2, 1), (3, 2);
 
 
 ------
-1️⃣ ReportService.java
+📄 src/main/java/project/user/service/ReportService.java
 package project.user.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import project.user.model.Report;
+import project.user.model.UserSubGroup;
 import project.user.repository.ReportRepository;
+import project.user.repository.UserSubGroupRepository;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Locale;
+import java.util.Map;
 
 @Service
 public class ReportService {
 
-    @Autowired
-    private ReportRepository reportRepository;
+    private final ReportRepository reportRepository;
+    private final UserSubGroupRepository userSubGroupRepository;
 
-    // Get all reports for a user (filtering by subgroupId if you store it)
+    public ReportService(ReportRepository reportRepository,
+                         UserSubGroupRepository userSubGroupRepository) {
+        this.reportRepository = reportRepository;
+        this.userSubGroupRepository = userSubGroupRepository;
+    }
+
+    // Get all reports for a normal user (based on subgroups assigned)
     public List<Report> getReportsForUser(int userId) {
-        // For now return all reports, you can later filter by userId/subgroupId
-        return reportRepository.findAll();
+        Long uid = (long) userId;
+
+        List<UserSubGroup> links = userSubGroupRepository.findByUser_UserId(uid);
+        if (links.isEmpty()) return List.of();
+
+        // Collect reports from all assigned subgroups
+        List<Report> combined = new ArrayList<>();
+        for (UserSubGroup link : links) {
+            Long sgId = link.getSubGroup().getSubGroupId();
+            combined.addAll(reportRepository.findBySubGroup_SubGroupId(sgId));
+        }
+
+        // De-duplicate by reportId while preserving order
+        Map<Long, Report> dedup = new LinkedHashMap<>();
+        for (Report r : combined) {
+            dedup.putIfAbsent(r.getReportId(), r);
+        }
+        return new ArrayList<>(dedup.values());
     }
 
-    // Get single report by ID
+    // Get a single report by ID
     public Report getReportById(int id) {
-        return reportRepository.findById(id).orElse(null);
+        return reportRepository.findById((long) id).orElse(null);
     }
 
-    // Search reports by name/type for a user
+    // Search reports by name/type for that user
     public List<Report> searchReports(int userId, String query) {
-        return reportRepository.findAll()
-                .stream()
-                .filter(r -> r.getName().toLowerCase().contains(query.toLowerCase())
-                        || r.getType().toLowerCase().contains(query.toLowerCase()))
-                .collect(Collectors.toList());
+        String q = query == null ? "" : query.toLowerCase(Locale.ROOT);
+        return getReportsForUser(userId).stream()
+                .filter(r ->
+                        (r.getName() != null && r.getName().toLowerCase(Locale.ROOT).contains(q)) ||
+                        (r.getType() != null && r.getType().toLowerCase(Locale.ROOT).contains(q))
+                )
+                .toList();
     }
 }
 
-2️⃣ FavoriteService.java
+📄 src/main/java/project/user/service/FavoriteService.java
 package project.user.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import project.user.model.Favorite;
 import project.user.model.Report;
+import project.user.model.User;
 import project.user.repository.FavoriteRepository;
 import project.user.repository.ReportRepository;
+import project.user.repository.UserRepository;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class FavoriteService {
 
-    @Autowired
-    private FavoriteRepository favoriteRepository;
+    private final FavoriteRepository favoriteRepository;
+    private final ReportRepository reportRepository;
+    private final UserRepository userRepository;
 
-    @Autowired
-    private ReportRepository reportRepository;
+    public FavoriteService(FavoriteRepository favoriteRepository,
+                           ReportRepository reportRepository,
+                           UserRepository userRepository) {
+        this.favoriteRepository = favoriteRepository;
+        this.reportRepository = reportRepository;
+        this.userRepository = userRepository;
+    }
 
     // Add a report to favorites
     public Favorite addFavorite(int userId, int reportId) {
+        Long uid = (long) userId;
+        Long rid = (long) reportId;
+
+        User user = userRepository.findById(uid)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + uid));
+        Report report = reportRepository.findById(rid)
+                .orElseThrow(() -> new IllegalArgumentException("Report not found: " + rid));
+
+        // Check if already exists to avoid UNIQUE constraint violation
+        List<Favorite> existing = favoriteRepository.findByUser_UserId(uid);
+        for (Favorite f : existing) {
+            if (f.getReport() != null && rid.equals(f.getReport().getReportId())) {
+                return f; // already favorited
+            }
+        }
+
         Favorite fav = new Favorite();
-        fav.setUserId(userId);
-        fav.setReportId(reportId);
+        fav.setUser(user);
+        fav.setReport(report);
         return favoriteRepository.save(fav);
     }
 
-    // Get favorite reports for a user
+    // Get favorite reports (as Reports) for a user
     public List<Report> getFavorites(int userId) {
-        List<Favorite> favorites = favoriteRepository.findByUserId(userId);
-        List<Integer> reportIds = favorites.stream()
-                                           .map(Favorite::getReportId)
-                                           .collect(Collectors.toList());
-        return reportRepository.findAllById(reportIds);
+        Long uid = (long) userId;
+        return favoriteRepository.findByUser_UserId(uid).stream()
+                .map(Favorite::getReport)
+                .filter(r -> r != null)
+                .toList();
     }
 
     // Remove a report from favorites
     public void removeFavorite(int userId, int reportId) {
-        Favorite fav = favoriteRepository.findByUserIdAndReportId(userId, reportId);
-        if (fav != null) {
-            favoriteRepository.delete(fav);
-        }
+        Long uid = (long) userId;
+        Long rid = (long) reportId;
+
+        favoriteRepository.findByUser_UserId(uid).stream()
+                .filter(f -> f.getReport() != null && rid.equals(f.getReport().getReportId()))
+                .findFirst()
+                .ifPresent(favoriteRepository::delete);
     }
 }
 
-3️⃣ NotificationService.java
+📄 src/main/java/project/user/service/NotificationService.java
 package project.user.service;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import project.user.model.Notification;
 import project.user.repository.NotificationRepository;
@@ -343,12 +395,15 @@ import java.util.List;
 @Service
 public class NotificationService {
 
-    @Autowired
-    private NotificationRepository notificationRepository;
+    private final NotificationRepository notificationRepository;
+
+    public NotificationService(NotificationRepository notificationRepository) {
+        this.notificationRepository = notificationRepository;
+    }
 
     // Get all notifications for a user
     public List<Notification> getNotificationsForUser(int userId) {
-        return notificationRepository.findByUserId(userId);
+        return notificationRepository.findByUser_UserId((long) userId);
     }
 }
 ------
