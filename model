@@ -1,0 +1,191 @@
+1. Users → User.java
+package project.user.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Table(name = "users")   // Matches SQL table name
+@Getter
+@Setter
+public class User {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")
+    private Long userId;
+
+    @Column(nullable = false, unique = true)
+    private String email;
+
+    @Column(nullable = false)
+    private String password;
+
+    @Column(name = "user_role", nullable = false)
+    private String role;   // admin / ops / user
+
+    @Column(name = "group_id")
+    private String groupId;
+}
+
+2. Groups → Group.java
+package project.user.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Table(name = "groups")
+@Getter
+@Setter
+public class Group {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "group_id")
+    private Long groupId;
+
+    @Column(name = "group_name", nullable = false, unique = true)
+    private String groupName;
+}
+
+3. SubGroups → SubGroup.java
+package project.user.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Table(name = "subgroups")
+@Getter
+@Setter
+public class SubGroup {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "sub_group_id")
+    private Long subGroupId;
+
+    private String name;
+
+    @ManyToOne
+    @JoinColumn(name = "group_id", nullable = false)
+    private Group group;
+}
+
+4. User_SubGroups → UserSubGroup.java
+package project.user.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Table(name = "user_subgroups")
+@Getter
+@Setter
+public class UserSubGroup {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @ManyToOne
+    @JoinColumn(name = "sub_group_id", nullable = false)
+    private SubGroup subGroup;
+}
+
+5. Reports → Report.java
+package project.user.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.LocalDate;
+
+@Entity
+@Table(name = "reports")
+@Getter
+@Setter
+public class Report {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "report_id")
+    private Long reportId;
+
+    private String name;
+    private String type;
+    private LocalDate date;
+    private String folder;
+
+    @ManyToOne
+    @JoinColumn(name = "sub_group_id", nullable = false)
+    private SubGroup subGroup;
+}
+
+6. Favorites → Favorite.java
+package project.user.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Table(name = "favorites")
+@Getter
+@Setter
+public class Favorite {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @ManyToOne
+    @JoinColumn(name = "report_id", nullable = false)
+    private Report report;
+}
+
+7. Notifications → Notification.java
+package project.user.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+import java.time.LocalDateTime;
+
+@Entity
+@Table(name = "notifications")
+@Getter
+@Setter
+public class Notification {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "notification_id")
+    private Long notificationId;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;
+
+    @ManyToOne
+    @JoinColumn(name = "report_id", nullable = false)
+    private Report report;
+
+    @Column(name = "created_at")
+    private LocalDateTime createdAt = LocalDateTime.now();
+}
