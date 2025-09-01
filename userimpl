@@ -1,0 +1,244 @@
+📂 src/main/java/project/user/service/impl/ReportServiceImpl.java
+package project.user.service.impl;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import project.user.model.Report;
+import project.user.repository.ReportRepository;
+import project.user.repository.UserSubGroupRepository;
+import project.user.service.ReportService;
+
+import java.util.List;
+
+@Service
+public class ReportServiceImpl implements ReportService {
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    @Autowired
+    private UserSubGroupRepository userSubGroupRepository;
+
+    @Override
+    public List<Report> getReportsForUser(int userId) {
+        // Find all subgroup IDs assigned to this user
+        List<Integer> subgroupIds = userSubGroupRepository.findSubGroupIdsByUserId(userId);
+        return reportRepository.findBySubGroupIdIn(subgroupIds);
+    }
+
+    @Override
+    public Report getReportById(int id) {
+        return reportRepository.findById(id).orElse(null);
+    }
+
+    @Override
+    public List<Report> searchReports(int userId, String query) {
+        List<Integer> subgroupIds = userSubGroupRepository.findSubGroupIdsByUserId(userId);
+        return reportRepository.searchReports(subgroupIds, "%" + query + "%");
+    }
+}
+
+📂 src/main/java/project/user/service/impl/FavoriteServiceImpl.java
+package project.user.service.impl;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import project.user.model.Favorite;
+import project.user.model.Report;
+import project.user.repository.FavoriteRepository;
+import project.user.repository.ReportRepository;
+import project.user.service.FavoriteService;
+
+import java.util.List;
+
+@Service
+public class FavoriteServiceImpl implements FavoriteService {
+
+    @Autowired
+    private FavoriteRepository favoriteRepository;
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    @Override
+    public Favorite addFavorite(int userId, int reportId) {
+        // Avoid duplicate favorites (UNIQUE constraint will also protect)
+        if (favoriteRepository.findByUserIdAndReportId(userId, reportId).isPresent()) {
+            return favoriteRepository.findByUserIdAndReportId(userId, reportId).get();
+        }
+        Favorite favorite = new Favorite();
+        favorite.setUserId(userId);
+        favorite.setReportId(reportId);
+        return favoriteRepository.save(favorite);
+    }
+
+    @Override
+    public void removeFavorite(int userId, int reportId) {
+        favoriteRepository.findByUserIdAndReportId(userId, reportId)
+                .ifPresent(favoriteRepository::delete);
+    }
+
+    @Override
+    public List<Report> getFavorites(int userId) {
+        return reportRepository.findFavoritesByUserId(userId);
+    }
+}
+
+📂 src/main/java/project/user/service/impl/NotificationServiceImpl.java
+package project.user.service.impl;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import project.user.model.Notification;
+import project.user.repository.NotificationRepository;
+import project.user.service.NotificationService;
+
+import java.util.List;
+
+@Service
+public class NotificationServiceImpl implements NotificationService {
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Override
+    public List<Notification> getNotificationsForUser(int userId) {
+        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+    }
+}
+
+
+
+1️⃣ Final Controllers
+ReportsController.java
+package project.user.controller;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import project.user.model.Report;
+import project.user.service.ReportService;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/reports")
+public class ReportsController {
+
+    @Autowired
+    private ReportService reportService;
+
+    // 1. Get all reports for a normal user (based on subgroups assigned)
+    @GetMapping
+    public List<Report> getReportsByUser(@RequestParam int userId) {
+        return reportService.getReportsForUser(userId);
+    }
+
+    // 2. Get a single report by ID
+    @GetMapping("/{id}")
+    public Report getReportById(@PathVariable int id) {
+        return reportService.getReportById(id);
+    }
+
+    // 3. Search reports by query (name/type)
+    @GetMapping("/search")
+    public List<Report> searchReports(@RequestParam int userId, @RequestParam String query) {
+        return reportService.searchReports(userId, query);
+    }
+}
+
+FavoritesController.java (fixed version ✅)
+package project.user.controller;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import project.user.model.Report;
+import project.user.model.Favorite;
+import project.user.service.FavoriteService;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/favorites")
+public class FavoritesController {
+
+    @Autowired
+    private FavoriteService favoriteService;
+
+    // 4. Add a report to favorites
+    @PostMapping
+    public Favorite addFavorite(@RequestParam int userId, @RequestParam int reportId) {
+        return favoriteService.addFavorite(userId, reportId);
+    }
+
+    // 5. Get all favorite reports for a user
+    @GetMapping
+    public List<Report> getFavorites(@RequestParam int userId) {
+        return favoriteService.getFavorites(userId);
+    }
+
+    // 6. Remove a report from favorites
+    @DeleteMapping
+    public void removeFavorite(@RequestParam int userId, @RequestParam int reportId) {
+        favoriteService.removeFavorite(userId, reportId);
+    }
+}
+
+NotificationsController.java
+package project.user.controller;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+import project.user.model.Notification;
+import project.user.service.NotificationService;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/notifications")
+public class NotificationsController {
+
+    @Autowired
+    private NotificationService notificationService;
+
+    // 7. Get all notifications for a user
+    @GetMapping
+    public List<Notification> getNotificationsByUser(@RequestParam int userId) {
+        return notificationService.getNotificationsForUser(userId);
+    }
+}
+
+2️⃣ Sample DB Data (PostgreSQL)
+
+Run these inserts in pgAdmin so you have test data:
+
+-- Groups
+INSERT INTO Groups (group_name) VALUES ('Finance'), ('HR');
+
+-- SubGroups
+INSERT INTO SubGroups (name, group_id) VALUES ('Tax Reports', 1), ('Salary Slips', 2);
+
+-- Users
+INSERT INTO Users (email, password, user_role, group_id) 
+VALUES 
+('admin@test.com', 'admin123', 'admin', NULL),
+('user1@test.com', 'user123', 'user', 1),
+('user2@test.com', 'user456', 'user', 2);
+
+-- User_SubGroups (assign users to subgroups)
+INSERT INTO User_SubGroups (user_id, sub_group_id) VALUES 
+(2, 1),  -- user1 in Tax Reports
+(3, 2);  -- user2 in Salary Slips
+
+-- Reports
+INSERT INTO Reports (name, type, date, folder, sub_group_id) VALUES
+('Quarterly Tax Report', 'PDF', '2025-08-01', 'Tax Reports', 1),
+('Annual Salary Report', 'Excel', '2025-07-01', 'Salary Slips', 2);
+
+-- Favorites (optional for testing)
+INSERT INTO Favorites (user_id, report_id) VALUES (2, 1);
+
+-- Notifications
+INSERT INTO Notifications (user_id, report_id) VALUES (2, 1), (3, 2);
+
+
+
