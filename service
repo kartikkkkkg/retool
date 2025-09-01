@@ -36,21 +36,6 @@ public class ReportService {
         return reportRepository.findById(reportId);
     }
 }
-
-✅ FavoriteService.java
-package project.user.service;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import project.user.model.Favorite;
-import project.user.model.Report;
-import project.user.model.User;
-import project.user.repository.FavoriteRepository;
-import project.user.repository.ReportRepository;
-import project.user.repository.UserRepository;
-
-import java.util.List;
-
 @Service
 public class FavoriteService {
 
@@ -65,29 +50,30 @@ public class FavoriteService {
 
     // Add a report to favorites
     public Favorite addFavorite(Long userId, Long reportId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        Report report = reportRepository.findById(reportId)
-                .orElseThrow(() -> new RuntimeException("Report not found"));
-
-        Favorite favorite = new Favorite();
-        favorite.setUser(user);
-        favorite.setReport(report);
-
-        return favoriteRepository.save(favorite);
+        Favorite fav = new Favorite();
+        fav.setUser(userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found")));
+        fav.setReport(reportRepository.findById(reportId).orElseThrow(() -> new RuntimeException("Report not found")));
+        return favoriteRepository.save(fav);
     }
 
-    // Get favorites by user
-    public List<Favorite> getFavoritesByUser(Long userId) {
-        return favoriteRepository.findByUser_UserId(userId);
+    // Get favorite reports for a user
+    public List<Report> getFavorites(Long userId) {
+        List<Favorite> favorites = favoriteRepository.findByUser_UserId(userId);
+        return favorites.stream()
+                        .map(Favorite::getReport)
+                        .collect(Collectors.toList());
     }
 
-    // Remove favorite
-    public void removeFavorite(Long favoriteId) {
-        favoriteRepository.deleteById(favoriteId);
+    // Remove a report from favorites
+    public void removeFavorite(Long userId, Long reportId) {
+        List<Favorite> favorites = favoriteRepository.findByUser_UserId(userId);
+        favorites.stream()
+                 .filter(fav -> fav.getReport().getReportId().equals(reportId))
+                 .findFirst()
+                 .ifPresent(favoriteRepository::delete);
     }
 }
+
 
 ✅ NotificationService.java
 package project.user.service;
