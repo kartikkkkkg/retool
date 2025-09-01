@@ -1,110 +1,13 @@
-The 401 Unauthorized error persists because your `UserRegistrationDto` class includes a field for `user_id`, but your controller's `registerUser` method **does not** use a DTO. It still expects `@RequestParam` fields.
-
-Let's address both issues: the error message and the dependency check.
-
------
-
-### 1\. Why the 401 Unauthorized Error Occurs
-
-The debug logs in your image show the same critical lines as before:
-
-  * `DelegatingAuthenticationEntryPoint`: It's trying to find an authentication method for the request.
-  * `No match found. Using default entry point...BasicAuthenticationEntryPoint`: It's falling back to **HTTP Basic Authentication**, which is why you're getting a **401 Unauthorized** error. This indicates that your `permitAll()` rule is not working as expected.
-
-This is a deep-rooted configuration issue, likely caused by a conflict in how Spring Security's default filters are loaded and how you're trying to override them.
-
------
-
-### 2\. Dependency Check
-
-Your `pom.xml` file appears to have the standard dependencies for a Spring Boot REST API with security and a PostgreSQL database. There are no obvious conflicts here that would cause this specific `401` error.
-
-  * `spring-boot-starter-web`: Core web framework.
-  * `spring-boot-starter-data-jpa`: For database access.
-  * `postgresql`: The database driver.
-  * `spring-boot-starter-security`: For security.
-  * `springdoc-openapi-starter-webmvc-ui`: For API documentation (Swagger).
-
-These dependencies are fine. The issue is purely in the interaction between Spring's auto-configuration and your custom `SecurityConfig`.
-
------
-
-### 3\. The Definitive Fix
-
-We need to make one more, more aggressive change to the `SecurityConfig` to force Spring to respect your `permitAll()` rule. This involves disabling the Spring Security auto-configuration and taking full control.
-
-**Step A: Disable Auto-Configuration**
-
-Add the `(exclude = SecurityAutoConfiguration.class)` to your main application class's `@SpringBootApplication` annotation.
-
-```java
-package project.login;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
-
-@SpringBootApplication(exclude = {SecurityAutoConfiguration.class})
-public class ProjectApplication {
-
-    public static void main(String[] args) {
-        SpringApplication.run(ProjectApplication.class, args);
-    }
-}
-```
-
-**Step B: Use the Correct Controller Method**
-
-Your `AuthController` must match the `UserRegistrationDto` you are sending. Replace your `AuthController` with this correct version.
-
-```java
-package project.login.controller;
-
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import project.login.dto.UserRegistrationDto; // Make sure this import is correct
-import project.login.model.User;
-import project.login.service.UserService;
-
-@RestController
-@RequestMapping("/api/auth")
-public class AuthController {
-    
-    private final UserService userService;
-
-    public AuthController(UserService userService) {
-        this.userService = userService;
-    }
-
-    @PostMapping("/register")
-    public ResponseEntity<?> registerUser(@RequestBody UserRegistrationDto registrationDto) {
-        User newUser = new User();
-        newUser.setEmail(registrationDto.getEmail());
-        newUser.setPassword(registrationDto.getPassword()); 
-        newUser.setUser_role(registrationDto.getUser_role());
-
-        User createdUser = userService.registerNewUser(newUser);
-
-        if (createdUser != null) {
-            return ResponseEntity.ok("User registered successfully!");
-        } else {
-            return ResponseEntity.badRequest().body("User registration failed.");
-        }
-    }
-}
-```
-
-**Step C: The Working SecurityConfig**
-
-This is the correct and modern syntax for your `SecurityConfig`. Ensure your file matches this exactly.
-
-```java
 package project.login.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order; // Import the @Order annotation
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
@@ -115,7 +18,14 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 @EnableWebSecurity
 public class SecurityConfig {
 
+    private final UserDetailsService userDetailsService;
+
+    public SecurityConfig(UserDetailsService userDetailsService) {
+        this.userDetailsService = userDetailsService;
+    }
+
     @Bean
+    @Order(1) // This is the crucial change
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(AbstractHttpConfigurer::disable)
@@ -132,7 +42,13 @@ public class SecurityConfig {
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
-}
-```
 
-After making these changes, **perform a clean build** and **restart your application**. This set of changes should finally resolve the conflict and allow the registration endpoint to work correctly.
+    @Bean
+    public AuthenticationManager authenticationManager(HttpSecurity http) throws Exception {
+        AuthenticationManagerBuilder authenticationManagerBuilder = 
+            http.getSharedObject(AuthenticationManagerBuilder.class);
+        authenticationManagerBuilder.userDetailsService(userDetailsService)
+                                    .passwordEncoder(passwordEncoder());
+        return authenticationManagerBuilder.build();
+    }
+}
