@@ -1,0 +1,217 @@
+✅ 1. Report.java (Model)
+package com.example.demo.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+import java.time.LocalDate;
+
+@Entity
+@Getter
+@Setter
+@Table(name = "reports")
+public class Report {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "report_id")
+    private Long reportId;
+
+    private String name;
+    private String type;
+    private LocalDate date;
+    private String folder;
+
+    @ManyToOne
+    @JoinColumn(name = "sub_group_id", nullable = false)
+    private SubGroup subGroup; // make sure you have SubGroup entity
+}
+
+✅ 2. Favorite.java (Model)
+package com.example.demo.model;
+
+import jakarta.persistence.*;
+import lombok.Getter;
+import lombok.Setter;
+
+@Entity
+@Getter
+@Setter
+@Table(name = "favorites")
+public class Favorite {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne
+    @JoinColumn(name = "user_id", nullable = false)
+    private User user;  // make sure you have User entity
+
+    @ManyToOne
+    @JoinColumn(name = "report_id", nullable = false)
+    private Report report;
+}
+
+✅ 3. ReportRepository.java
+package com.example.demo.repository;
+
+import com.example.demo.model.Report;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface ReportRepository extends JpaRepository<Report, Long> {
+    List<Report> findBySubGroup_SubGroupId(Long subGroupId);
+}
+
+✅ 4. FavoriteRepository.java
+package com.example.demo.repository;
+
+import com.example.demo.model.Favorite;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface FavoriteRepository extends JpaRepository<Favorite, Long> {
+    List<Favorite> findByUser_UserId(Long userId);
+}
+
+✅ 5. FavoriteService.java
+package com.example.demo.service;
+
+import com.example.demo.model.Favorite;
+import com.example.demo.model.Report;
+import com.example.demo.repository.FavoriteRepository;
+import com.example.demo.repository.ReportRepository;
+import com.example.demo.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class FavoriteService {
+
+    @Autowired
+    private FavoriteRepository favoriteRepository;
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    // Add report to favorites
+    public Favorite addFavorite(Long userId, Long reportId) {
+        Favorite fav = new Favorite();
+        fav.setUser(userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found")));
+        fav.setReport(reportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found")));
+        return favoriteRepository.save(fav);
+    }
+
+    // Get all favorite reports for a user
+    public List<Report> getFavorites(Long userId) {
+        List<Favorite> favorites = favoriteRepository.findByUser_UserId(userId);
+        return favorites.stream()
+                .map(Favorite::getReport)
+                .collect(Collectors.toList());
+    }
+
+    // Remove favorite report
+    public void removeFavorite(Long userId, Long reportId) {
+        List<Favorite> favorites = favoriteRepository.findByUser_UserId(userId);
+        favorites.stream()
+                .filter(fav -> fav.getReport() != null &&
+                               fav.getReport().getReportId().equals(reportId))
+                .findFirst()
+                .ifPresent(favoriteRepository::delete);
+    }
+}
+
+✅ 6. FavoriteController.java
+package com.example.demo.controller;
+
+import com.example.demo.model.Favorite;
+import com.example.demo.model.Report;
+import com.example.demo.service.FavoriteService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/favorites")
+public class FavoriteController {
+
+    @Autowired
+    private FavoriteService favoriteService;
+
+    @PostMapping("/{userId}/{reportId}")
+    public Favorite addFavorite(@PathVariable Long userId, @PathVariable Long reportId) {
+        return favoriteService.addFavorite(userId, reportId);
+    }
+
+    @GetMapping("/{userId}")
+    public List<Report> getFavorites(@PathVariable Long userId) {
+        return favoriteService.getFavorites(userId);
+    }
+
+    @DeleteMapping("/{userId}/{reportId}")
+    public String removeFavorite(@PathVariable Long userId, @PathVariable Long reportId) {
+        favoriteService.removeFavorite(userId, reportId);
+        return "Favorite removed successfully";
+    }
+}
+
+✅ 7. ReportController.java
+package com.example.demo.controller;
+
+import com.example.demo.model.Report;
+import com.example.demo.repository.ReportRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/reports")
+public class ReportController {
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    @GetMapping("/subgroup/{subGroupId}")
+    public List<Report> getReportsBySubGroup(@PathVariable Long subGroupId) {
+        return reportRepository.findBySubGroup_SubGroupId(subGroupId);
+    }
+
+    @PostMapping
+    public Report createReport(@RequestBody Report report) {
+        return reportRepository.save(report);
+    }
+}
+
+✅ 8. NotificationController.java
+package com.example.demo.controller;
+
+import com.example.demo.model.Notification;
+import com.example.demo.repository.NotificationRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;https://github.com/kartikkkkkg/retool/tree/main
+
+import java.util.List;
+
+@RestController
+@RequestMapping("/notifications")
+public class NotificationController {
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @GetMapping("/{userId}")
+    public List<Notification> getUserNotifications(@PathVariable Long userId) {
+        return notificationRepository.findByUser_UserId(userId);
+    }
+}
