@@ -242,3 +242,117 @@ INSERT INTO Notifications (user_id, report_id) VALUES (2, 1), (3, 2);
 
 
 
+
+------
+1️⃣ ReportService.java
+package project.user.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import project.user.model.Report;
+import project.user.repository.ReportRepository;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class ReportService {
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    // Get all reports for a user (filtering by subgroupId if you store it)
+    public List<Report> getReportsForUser(int userId) {
+        // For now return all reports, you can later filter by userId/subgroupId
+        return reportRepository.findAll();
+    }
+
+    // Get single report by ID
+    public Report getReportById(int id) {
+        return reportRepository.findById(id).orElse(null);
+    }
+
+    // Search reports by name/type for a user
+    public List<Report> searchReports(int userId, String query) {
+        return reportRepository.findAll()
+                .stream()
+                .filter(r -> r.getName().toLowerCase().contains(query.toLowerCase())
+                        || r.getType().toLowerCase().contains(query.toLowerCase()))
+                .collect(Collectors.toList());
+    }
+}
+
+2️⃣ FavoriteService.java
+package project.user.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import project.user.model.Favorite;
+import project.user.model.Report;
+import project.user.repository.FavoriteRepository;
+import project.user.repository.ReportRepository;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class FavoriteService {
+
+    @Autowired
+    private FavoriteRepository favoriteRepository;
+
+    @Autowired
+    private ReportRepository reportRepository;
+
+    // Add a report to favorites
+    public Favorite addFavorite(int userId, int reportId) {
+        Favorite fav = new Favorite();
+        fav.setUserId(userId);
+        fav.setReportId(reportId);
+        return favoriteRepository.save(fav);
+    }
+
+    // Get favorite reports for a user
+    public List<Report> getFavorites(int userId) {
+        List<Favorite> favorites = favoriteRepository.findByUserId(userId);
+        List<Integer> reportIds = favorites.stream()
+                                           .map(Favorite::getReportId)
+                                           .collect(Collectors.toList());
+        return reportRepository.findAllById(reportIds);
+    }
+
+    // Remove a report from favorites
+    public void removeFavorite(int userId, int reportId) {
+        Favorite fav = favoriteRepository.findByUserIdAndReportId(userId, reportId);
+        if (fav != null) {
+            favoriteRepository.delete(fav);
+        }
+    }
+}
+
+3️⃣ NotificationService.java
+package project.user.service;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import project.user.model.Notification;
+import project.user.repository.NotificationRepository;
+
+import java.util.List;
+
+@Service
+public class NotificationService {
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    // Get all notifications for a user
+    public List<Notification> getNotificationsForUser(int userId) {
+        return notificationRepository.findByUserId(userId);
+    }
+}
+------
+
+
+
+
