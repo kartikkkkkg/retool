@@ -1,0 +1,160 @@
+Okay, that makes perfect sense. The frontend's dropdown selection provides an additional layer of verification.
+
+Here are the updated code snippets for the DTO and the controller.
+
+1. Updated LoginRequest DTO
+
+This class now includes a role field to receive the user's selected role from the dropdown menu.
+
+Create the file: src/main/java/project/login/dto/LoginRequest.java
+
+Java
+package project.login.dto;
+
+import lombok.Data;
+
+@Data
+public class LoginRequest {
+    private String email;
+    private String password;
+    private String role; // Field to receive the role from the dropdown
+}
+2. Updated LoginController
+
+The controller will now receive the role from the LoginRequest object and perform an additional check. It will verify that the role provided from the dropdown matches the role(s) associated with the user in the database.
+
+Create the file: src/main/java/project/login/controller/LoginController.java
+
+Java
+package project.login.controller;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import project.common.model.User;
+import project.login.dto.LoginRequest;
+import project.login.repository.UserRepository;
+import java.util.Collections;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api")
+public class LoginController {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @PostMapping("/login")
+    public ResponseEntity<Map<String, String>> authenticateUser(@RequestBody LoginRequest loginRequest) {
+        
+        // Find the user by the provided email
+        User user = userRepository.findByEmail(loginRequest.getEmail())
+            .orElse(null);
+
+        // Check if user exists and password matches
+        if (user != null && passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            
+            // Now, verify the role provided from the dropdown against the role in the database
+            String dbRole = user.getUserRole();
+            if (dbRole.equalsIgnoreCase(loginRequest.getRole())) {
+                // Credentials and role match, return success
+                return ResponseEntity.ok(Collections.singletonMap("role", dbRole));
+            } else {
+                // Authentication failed: role mismatch
+                return ResponseEntity.status(401).body(Collections.singletonMap("error", "Role mismatch. Please select the correct role."));
+            }
+        } else {
+            // Authentication failed: Invalid credentials
+            return ResponseEntity.status(401).body(Collections.singletonMap("error", "Invalid email or password."));
+        }
+    }
+}
+
+2. UserRepository Interface
+
+This is the JPA repository for fetching user data from the database.
+
+Create the file: src/main/java/project/login/repository/UserRepository.java
+
+Java
+package project.login.repository;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import project.common.model.User;
+import java.util.Optional;
+
+public interface UserRepository extends JpaRepository<User, Long> {
+    Optional<User> findByEmail(String email);
+}
+3. SecurityConfig Class
+
+This is the main Spring Security configuration. It disables CSRF, sets up basic HTTP authentication, and defines how users are loaded from your database.
+
+Create the file: src/main/java/project/login/config/SecurityConfig.java
+
+Java
+package project.login.config;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.SecurityFilterChain;
+import project.login.repository.UserRepository;
+import project.common.model.User;
+
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    private final UserRepository userRepository;
+
+    public SecurityConfig(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .csrf(csrf -> csrf.disable()) // Disable CSRF for API calls
+            .authorizeHttpRequests(authorizeRequests -> authorizeRequests
+                .requestMatchers("/api/login").permitAll() // Allow public access to the login endpoint
+                .anyRequest().authenticated() // All other requests require authentication
+            )
+            .httpBasic(httpBasic -> {}); // Enable Basic Authentication for simplicity
+            
+        return http.build();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public UserDetailsService userDetailsService() {
+        return email -> {
+            User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
+            
+            // Your getUserRole() method is a good way to get the role.
+            // Ensure this method returns a string like "ROLE_ADMIN" or "ROLE_USER".
+            return org.springframework.security.core.userdetails.User
+                .withUsername(user.getEmail())
+                .password(user.getPassword())
+                .roles(user.getUserRole()) // This should return a string like "ADMIN"
+                .build();
+        };
+    }
+}
