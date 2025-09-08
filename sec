@@ -1,12 +1,3 @@
-I understand you want to simplify the login process and skip password encryption for now. While this is not recommended for any production environment due to significant security risks, it can be useful for a basic, local development setup.
-
-Here is the updated code to implement a login system that uses plain-text passwords.
-
-1. Update SecurityConfig.java ⚠️
-
-You must tell Spring Security to stop expecting a hashed password. You can do this by using a NoOpPasswordEncoder. This is explicitly a plain-text password encoder.
-
-Java
 package project.login.config;
 
 import org.springframework.context.annotation.Bean;
@@ -15,7 +6,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.password.NoOpPasswordEncoder; // Import this
+import org.springframework.security.crypto.password.NoOpPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import project.common.model.User;
@@ -34,6 +25,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+            // Use the new syntax to disable CSRF
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authorizeRequests -> authorizeRequests
                 .requestMatchers("/api/login").permitAll()
@@ -44,8 +36,6 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // ⚠️ WARNING: This is for development purposes only.
-        // It's insecure and should never be used in production.
         return NoOpPasswordEncoder.getInstance();
     }
 
@@ -61,51 +51,5 @@ public class SecurityConfig {
                 .roles(user.getUserRole())
                 .build();
         };
-    }
-}
-2. Update LoginController.java
-
-You no longer need the PasswordEncoder to check the password. A simple string comparison will suffice.
-
-Java
-package project.login.controller;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import project.common.model.User;
-import project.login.dto.LoginRequest;
-import project.login.repository.UserRepository;
-import java.util.Collections;
-import java.util.Map;
-
-@RestController
-@RequestMapping("/api")
-public class LoginController {
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> authenticateUser(@RequestBody LoginRequest loginRequest) {
-        
-        User user = userRepository.findByEmail(loginRequest.getEmail())
-            .orElse(null);
-
-        // Simple password comparison without encryption
-        if (user != null && user.getPassword().equals(loginRequest.getPassword())) {
-            
-            String dbRole = user.getUserRole();
-            if (dbRole.equalsIgnoreCase(loginRequest.getRole())) {
-                return ResponseEntity.ok(Collections.singletonMap("role", dbRole));
-            } else {
-                return ResponseEntity.status(401).body(Collections.singletonMap("error", "Role mismatch. Please select the correct user type."));
-            }
-        } else {
-            return ResponseEntity.status(401).body(Collections.singletonMap("error", "Invalid email or password."));
-        }
     }
 }
