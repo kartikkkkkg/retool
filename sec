@@ -1,23 +1,8 @@
-@Bean
-public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-    http
-        .csrf(csrf -> csrf.disable()) // Disable CSRF for API calls
-        .authorizeHttpRequests(authorizeRequests -> authorizeRequests
-            // Explicitly permit the login endpoint
-            .requestMatchers("/api/login").permitAll() 
-            // All other requests require authentication
-            .anyRequest().authenticated() 
-        )
-        // You don't need httpBasic() for a custom login controller
-        // .httpBasic(Customizer.withDefaults()); 
-        .formLogin(form -> form.disable()); // Disable form login since you're using a REST API
-
-    return http.build();
-}
 package project.login.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -41,35 +26,30 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            // Disable CSRF protection for API calls from Postman and your React frontend
-            .csrf(csrf -> csrf.disable())
+            .csrf(csrf -> csrf.disable()) // Disable CSRF for API access
             .authorizeHttpRequests(authorizeRequests -> authorizeRequests
-                // Allow the login endpoint to be accessed without authentication
-                .requestMatchers("/api/login").permitAll()
-                // Require authentication for all other endpoints
-                .anyRequest().authenticated()
-            );
+                .anyRequest().authenticated() // All requests require authentication
+            )
+            .httpBasic(Customizer.withDefaults()); // Enable HTTP Basic authentication
+
         return http.build();
     }
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // Use BCrypt for secure password hashing
         return new BCryptPasswordEncoder();
     }
 
     @Bean
     public UserDetailsService userDetailsService() {
         return email -> {
-            // Fetch the user from the database using the UserRepository
             User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
             
-            // Build and return a UserDetails object for Spring Security
             return org.springframework.security.core.userdetails.User
                 .withUsername(user.getEmail())
                 .password(user.getPassword())
-                .roles(user.getUserRole()) // Ensure this method returns a simple string like "ADMIN"
+                .roles(user.getUserRole())
                 .build();
         };
     }
