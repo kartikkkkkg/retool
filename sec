@@ -1,78 +1,12 @@
-You are absolutely right. My apologies for that oversight. The variable names must match to ensure the logic works correctly.
+I understand you want to simplify the login process and skip password encryption for now. While this is not recommended for any production environment due to significant security risks, it can be useful for a basic, local development setup.
 
-Here are the corrected code snippets for both the LoginRequest DTO and the LoginController.
+Here is the updated code to implement a login system that uses plain-text passwords.
 
-1. Corrected LoginRequest DTO
+1. Update SecurityConfig.java ⚠️
 
-This DTO will now receive the role from your frontend dropdown to match the database column.
-
-File: src/main/java/project/login/dto/LoginRequest.java
+You must tell Spring Security to stop expecting a hashed password. You can do this by using a NoOpPasswordEncoder. This is explicitly a plain-text password encoder.
 
 Java
-package project.login.dto;
-
-import lombok.Data;
-
-@Data
-public class LoginRequest {
-    private String email;
-    private String password;
-    private String role; // Corrected to match the frontend input
-}
-2. Corrected LoginController
-
-The controller now correctly uses loginRequest.getRole() to compare against the database's user_role.
-
-File: src/main/java/project/login/controller/LoginController.java
-
-Java
-package project.login.controller;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import project.common.model.User;
-import project.login.dto.LoginRequest;
-import project.login.repository.UserRepository;
-import java.util.Collections;
-import java.util.Map;
-
-@RestController
-@RequestMapping("/api")
-public class LoginController {
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> authenticateUser(@RequestBody LoginRequest loginRequest) {
-        
-        User user = userRepository.findByEmail(loginRequest.getEmail())
-            .orElse(null);
-
-        if (user != null && passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
-            
-            // Now, we correctly compare the role from the request to the database role
-            String dbRole = user.getUserRole();
-            if (dbRole.equalsIgnoreCase(loginRequest.getRole())) { // Corrected from getUserType()
-                return ResponseEntity.ok(Collections.singletonMap("role", dbRole));
-            } else {
-                return ResponseEntity.status(401).body(Collections.singletonMap("error", "Role mismatch. Please select the correct user type."));
-            }
-        } else {
-            return ResponseEntity.status(401).body(Collections.singletonMap("error", "Invalid email or password."));
-        }
-    }
-}
-
-
 package project.login.config;
 
 import org.springframework.context.annotation.Bean;
@@ -81,7 +15,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.NoOpPasswordEncoder; // Import this
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import project.common.model.User;
@@ -100,12 +34,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
-            // Disable CSRF for API-based authentication
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authorizeRequests -> authorizeRequests
-                // Allow the login endpoint to be accessed without authentication
                 .requestMatchers("/api/login").permitAll()
-                // All other requests require authentication
                 .anyRequest().authenticated()
             );
         return http.build();
@@ -113,13 +44,13 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        // Use BCrypt for strong password hashing
-        return new BCryptPasswordEncoder();
+        // ⚠️ WARNING: This is for development purposes only.
+        // It's insecure and should never be used in production.
+        return NoOpPasswordEncoder.getInstance();
     }
 
     @Bean
     public UserDetailsService userDetailsService() {
-        // Configure how Spring Security loads user data from your database
         return email -> {
             User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
@@ -130,5 +61,51 @@ public class SecurityConfig {
                 .roles(user.getUserRole())
                 .build();
         };
+    }
+}
+2. Update LoginController.java
+
+You no longer need the PasswordEncoder to check the password. A simple string comparison will suffice.
+
+Java
+package project.login.controller;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import project.common.model.User;
+import project.login.dto.LoginRequest;
+import project.login.repository.UserRepository;
+import java.util.Collections;
+import java.util.Map;
+
+@RestController
+@RequestMapping("/api")
+public class LoginController {
+
+    @Autowired
+    private UserRepository userRepository;
+
+    @PostMapping("/login")
+    public ResponseEntity<Map<String, String>> authenticateUser(@RequestBody LoginRequest loginRequest) {
+        
+        User user = userRepository.findByEmail(loginRequest.getEmail())
+            .orElse(null);
+
+        // Simple password comparison without encryption
+        if (user != null && user.getPassword().equals(loginRequest.getPassword())) {
+            
+            String dbRole = user.getUserRole();
+            if (dbRole.equalsIgnoreCase(loginRequest.getRole())) {
+                return ResponseEntity.ok(Collections.singletonMap("role", dbRole));
+            } else {
+                return ResponseEntity.status(401).body(Collections.singletonMap("error", "Role mismatch. Please select the correct user type."));
+            }
+        } else {
+            return ResponseEntity.status(401).body(Collections.singletonMap("error", "Invalid email or password."));
+        }
     }
 }
