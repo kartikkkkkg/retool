@@ -1,0 +1,16 @@
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    http
+        .csrf(csrf -> csrf.disable()) // Disable CSRF for API calls
+        .authorizeHttpRequests(authorizeRequests -> authorizeRequests
+            // Explicitly permit the login endpoint
+            .requestMatchers("/api/login").permitAll() 
+            // All other requests require authentication
+            .anyRequest().authenticated() 
+        )
+        // You don't need httpBasic() for a custom login controller
+        // .httpBasic(Customizer.withDefaults()); 
+        .formLogin(form -> form.disable()); // Disable form login since you're using a REST API
+
+    return http.build();
+}
